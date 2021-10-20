@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/dadosjusbr/coletores"
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/storage"
+	"github.com/dadosjusbr/proto/pipeline"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -17,6 +17,7 @@ type config struct {
 	DBName     string `envconfig:"MONGODB_DBNAME"`
 	MongoMICol string `envconfig:"MONGODB_MICOL"`
 	MongoAgCol string `envconfig:"MONGODB_AGCOL"`
+	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
 	// Swift Conf
 	SwiftUsername  string `envconfig:"SWIFT_USERNAME"`
 	SwiftAPIKey    string `envconfig:"SWIFT_APIKEY"`
@@ -25,21 +26,16 @@ type config struct {
 	SwiftContainer string `envconfig:"SWIFT_CONTAINER"`
 }
 
-type executionResult struct {
-	Pr coletores.PackagingResult
-	Cr coletores.CrawlingResult
-}
-
 func main() {
 	var c config
 	if err := envconfig.Process("", &c); err != nil {
-		status.ExitFromError(status.NewError(4, fmt.Errorf("Error loading config values from .env: %v", err.Error())))
+		status.ExitFromError(status.NewError(4, fmt.Errorf("error loading config values from .env: %v", err.Error())))
 	}
 	client, err := newClient(c)
 	if err != nil {
 		status.ExitFromError(status.NewError(3, fmt.Errorf("newClient() error: %s", err)))
 	}
-	var er executionResult
+	var er pipeline.ResultadoExecucao
 	erIN, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
@@ -49,31 +45,29 @@ func main() {
 	}
 
 	agmi := storage.AgencyMonthlyInfo{
-		AgencyID: er.Cr.AgencyID,
-		Month:    er.Cr.Month,
-		Year:     er.Cr.Year,
+		AgencyID: er.Rc.Coleta.Orgao,
+		Month:    int(er.Rc.Coleta.Mes),
+		Year:     int(er.Rc.Coleta.Ano),
 	}
 	var packBackup *storage.Backup
 	var backup []storage.Backup
-	if er.Pr.Package != "" {
-		packBackup, err = client.Cloud.UploadFile(er.Pr.Package)
+	if er.Pr.Pacote != "" {
+		packBackup, err = client.Cloud.UploadFile(er.Pr.Pacote, er.Rc.Coleta.Orgao)
 		if err != nil {
-			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup package files: %v, error: %v", er.Pr.Package, err)))
+			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup package files: %v, error: %v", er.Pr.Pacote, err)))
 		}
 		agmi.Package = packBackup
 	}
-	if er.Cr.Files != nil {
-		backup, err = client.Cloud.Backup(er.Cr.Files)
+	if er.Rc.Coleta.Arquivos != nil {
+		backup, err = client.Cloud.Backup(er.Rc.Coleta.Arquivos, er.Rc.Coleta.Orgao)
 		if err != nil {
-			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup files: %v, error: %v", er.Cr.Files, err)))
+			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup files: %v, error: %v", er.Rc.Coleta.Arquivos, err)))
 		}
 		agmi.Backups = backup
 	}
 
-	if er.Cr.ProcInfo.ExitStatus != 0 {
-		agmi.ProcInfo = &er.Cr.ProcInfo
-	} else {
-		agmi.ProcInfo = &er.Pr.ProcInfo
+	if er.Rc.Procinfo != nil && er.Rc.Procinfo.Status != 0 {
+		agmi.ProcInfo = er.Rc.Procinfo
 	}
 
 	if err = client.Store(agmi); err != nil {
@@ -83,7 +77,7 @@ func main() {
 
 // newClient Creates client to connect with DB and Cloud5
 func newClient(conf config) (*storage.Client, error) {
-	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, conf.MongoMICol, conf.MongoAgCol)
+	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, conf.MongoMICol, conf.MongoAgCol, conf.MongoPkgCol)
 	if err != nil {
 		return nil, fmt.Errorf("error creating DB client: %q", err)
 	}
