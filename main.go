@@ -7,16 +7,21 @@ import (
 	"os"
 
 	"github.com/dadosjusbr/coletores/status"
+	"github.com/dadosjusbr/executor"
+	"github.com/dadosjusbr/proto/coleta"
 	"github.com/dadosjusbr/storage"
-	"github.com/dadosjusbr/proto/pipeline"
 	"github.com/kelseyhightower/envconfig"
 )
 
 type config struct {
-	MongoURI   string `envconfig:"MONGODB_URI"`
-	DBName     string `envconfig:"MONGODB_DBNAME"`
-	MongoMICol string `envconfig:"MONGODB_MICOL"`
-	MongoAgCol string `envconfig:"MONGODB_AGCOL"`
+	Month int    `envconfig:"MONTH"`
+	Year  int    `envconfig:"YEAR"`
+	AID   string `envconfig:"AID"`
+
+	MongoURI    string `envconfig:"MONGODB_URI"`
+	DBName      string `envconfig:"MONGODB_DBNAME"`
+	MongoMICol  string `envconfig:"MONGODB_MICOL"`
+	MongoAgCol  string `envconfig:"MONGODB_AGCOL"`
 	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
 	// Swift Conf
 	SwiftUsername  string `envconfig:"SWIFT_USERNAME"`
@@ -35,41 +40,34 @@ func main() {
 	if err != nil {
 		status.ExitFromError(status.NewError(3, fmt.Errorf("newClient() error: %s", err)))
 	}
-	var er pipeline.ResultadoExecucao
+	var pExec executor.PipelineExecution
 	erIN, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
-	if err = json.Unmarshal(erIN, &er); err != nil {
+	if err = json.Unmarshal(erIN, &pExec); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
 
 	agmi := storage.AgencyMonthlyInfo{
-		AgencyID: er.Rc.Coleta.Orgao,
-		Month:    int(er.Rc.Coleta.Mes),
-		Year:     int(er.Rc.Coleta.Ano),
+		AgencyID: c.AID,
+		Month:    c.Month,
+		Year:     c.Year,
 	}
-	var packBackup *storage.Backup
-	var backup []storage.Backup
-	if er.Pr.Pacote != "" {
-		packBackup, err = client.Cloud.UploadFile(er.Pr.Pacote, er.Rc.Coleta.Orgao)
-		if err != nil {
-			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup package files: %v, error: %v", er.Pr.Pacote, err)))
+	for _, r := range pExec.Results {
+		if r.Status != executor.StageExecution_OK {
+			switch r.Status {
+			case executor.StageExecution_SETUP_ERROR:
+				agmi.ProcInfo = stepExec2ProcInfo(r.Setup)
+			case executor.StageExecution_BUILD_ERROR:
+				agmi.ProcInfo = stepExec2ProcInfo(r.Build)
+			case executor.StageExecution_RUN_ERROR:
+				agmi.ProcInfo = stepExec2ProcInfo(r.Run)
+			case executor.StageExecution_TEARDOWN_ERROR:
+				agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
+			}
 		}
-		agmi.Package = packBackup
 	}
-	if er.Rc.Coleta.Arquivos != nil {
-		backup, err = client.Cloud.Backup(er.Rc.Coleta.Arquivos, er.Rc.Coleta.Orgao)
-		if err != nil {
-			status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to get Backup files: %v, error: %v", er.Rc.Coleta.Arquivos, err)))
-		}
-		agmi.Backups = backup
-	}
-
-	if er.Rc.Procinfo != nil && er.Rc.Procinfo.Status != 0 {
-		agmi.ProcInfo = er.Rc.Procinfo
-	}
-
 	if err = client.Store(agmi); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi: %v", err)))
 	}
@@ -88,4 +86,16 @@ func newClient(conf config) (*storage.Client, error) {
 		return nil, fmt.Errorf("error creating storage.client: %q", err)
 	}
 	return client, nil
+}
+
+func stepExec2ProcInfo(se *executor.StepExecution) *coleta.ProcInfo {
+	return &coleta.ProcInfo{
+		Cmd:    se.Cmd,
+		CmdDir: se.CmdDir,
+		Stdin:  se.Stdin,
+		Stdout: se.Stdout,
+		Stderr: se.Stderr,
+		Status: se.StatusCode,
+		Env:    se.Env,
+	}
 }
