@@ -1,16 +1,17 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/executor"
 	"github.com/dadosjusbr/proto/coleta"
 	"github.com/dadosjusbr/storage"
 	"github.com/kelseyhightower/envconfig"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 type config struct {
@@ -45,29 +46,32 @@ func main() {
 	if err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
-	if err = json.Unmarshal(erIN, &pExec); err != nil {
+	if err := prototext.Unmarshal(erIN, &pExec); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
 
 	agmi := storage.AgencyMonthlyInfo{
-		AgencyID: c.AID,
+		AgencyID: strings.ToLower(c.AID),
 		Month:    c.Month,
 		Year:     c.Year,
 	}
 	for _, r := range pExec.Results {
-		if r.Status != executor.StageExecution_OK {
-			switch r.Status {
-			case executor.StageExecution_SETUP_ERROR:
-				agmi.ProcInfo = stepExec2ProcInfo(r.Setup)
-			case executor.StageExecution_BUILD_ERROR:
-				agmi.ProcInfo = stepExec2ProcInfo(r.Build)
-			case executor.StageExecution_RUN_ERROR:
-				agmi.ProcInfo = stepExec2ProcInfo(r.Run)
-			case executor.StageExecution_TEARDOWN_ERROR:
-				agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
-			}
+		switch r.Status {
+		case executor.StageExecution_SETUP_ERROR:
+			agmi.ProcInfo = stepExec2ProcInfo(r.Setup)
+			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
+		case executor.StageExecution_BUILD_ERROR:
+			agmi.ProcInfo = stepExec2ProcInfo(r.Build)
+			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
+		case executor.StageExecution_RUN_ERROR:
+			agmi.ProcInfo = stepExec2ProcInfo(r.Run)
+			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
+		case executor.StageExecution_TEARDOWN_ERROR:
+			agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
+			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		}
 	}
+
 	if err = client.Store(agmi); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi: %v", err)))
 	}

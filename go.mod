@@ -11,4 +11,5 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/tidwall/pretty v1.0.2 // indirect
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9 // indirect
+	google.golang.org/protobuf v1.27.1
 )
