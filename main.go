@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dadosjusbr/coletores/status"
@@ -14,9 +15,20 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
+// O tipo decInt é necessário pois a biblioteca converte usando ParseInt passando
+// zero na base. Ou seja, meses como 08 passam a ser inválidos pois são tratados
+// como números octais.
+type decInt int
+
+func (i *decInt) Decode(value string) error {
+	v, err := strconv.Atoi(value)
+	*i = decInt(v)
+	return err
+}
+
 type config struct {
-	Month int    `envconfig:"MONTH"`
-	Year  int    `envconfig:"YEAR"`
+	Month decInt `envconfig:"MONTH"`
+	Year  decInt `envconfig:"YEAR"`
 	AID   string `envconfig:"AID"`
 
 	MongoURI    string `envconfig:"MONGODB_URI"`
@@ -52,8 +64,8 @@ func main() {
 
 	agmi := storage.AgencyMonthlyInfo{
 		AgencyID: strings.ToLower(c.AID),
-		Month:    c.Month,
-		Year:     c.Year,
+		Month:    int(c.Month),
+		Year:     int(c.Year),
 	}
 	for _, r := range pExec.Results {
 		switch r.Status {
