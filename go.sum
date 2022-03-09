@@ -20,6 +20,8 @@ github.com/dadosjusbr/executor v0.0.0-20211027234931-d5885d64d0a1/go.mod h1:STVS
 github.com/dadosjusbr/proto v0.0.0-20211004174721-e51d25d61af2/go.mod h1:a04KL3nn5wvlJTuoTYggaeokQi3njDyt9L7Ss9EQEJQ=
 github.com/dadosjusbr/proto v0.0.0-20211015231253-b8391964395a h1:JkMyCT92jfqi06dVCjT+J0Kg4M6P24I0S6WQmSN62ns=
 github.com/dadosjusbr/proto v0.0.0-20211015231253-b8391964395a/go.mod h1:O+J9NWE4o4IkP6XN7CMZ8TnPxrbkqyuIp/Wvvst4W/s=
+github.com/dadosjusbr/proto v0.0.0-20220304160723-47e93e9d97b5 h1:T1vX+7BhXkkYRZnRdla0Z8Uu9Emww7x2jNbowmbtOwM=
+github.com/dadosjusbr/proto v0.0.0-20220304160723-47e93e9d97b5/go.mod h1:a04KL3nn5wvlJTuoTYggaeokQi3njDyt9L7Ss9EQEJQ=
 github.com/dadosjusbr/storage v0.0.0-20211011202858-c4685ca18a61 h1:54MlDJk/1/u9jDHXnjw0QR+LtriXE7yl6m0oVHW/Ssc=
 github.com/dadosjusbr/storage v0.0.0-20211011202858-c4685ca18a61/go.mod h1:QwThwjQA+ZNDB1pYpiIBeXo/mtg7GDJcNDVH3wWDCHQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
