@@ -36,6 +36,8 @@ type config struct {
 	MongoMICol  string `envconfig:"MONGODB_MICOL"`
 	MongoAgCol  string `envconfig:"MONGODB_AGCOL"`
 	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
+	MongoRevCol string `envconfig:"MONGODB_REVCOL"`
+
 	// Swift Conf
 	SwiftUsername  string `envconfig:"SWIFT_USERNAME"`
 	SwiftAPIKey    string `envconfig:"SWIFT_APIKEY"`
@@ -91,7 +93,7 @@ func main() {
 
 // newClient Creates client to connect with DB and Cloud5
 func newClient(conf config) (*storage.Client, error) {
-	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, conf.MongoMICol, conf.MongoAgCol, conf.MongoPkgCol)
+	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, conf.MongoMICol, conf.MongoAgCol, conf.MongoPkgCol, conf.MongoRevCol)
 	if err != nil {
 		return nil, fmt.Errorf("error creating DB client: %q", err)
 	}
