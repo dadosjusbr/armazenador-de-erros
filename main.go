@@ -27,13 +27,15 @@ func (i *decInt) Decode(value string) error {
 }
 
 type config struct {
-	Month decInt `envconfig:"MONTH"`
-	Year  decInt `envconfig:"YEAR"`
-	AID   string `envconfig:"AID"`
+	Month     decInt `envconfig:"MONTH"`
+	Year      decInt `envconfig:"YEAR"`
+	AID       string `envconfig:"AID"`
+	SuccCodes []int  `envconfig:"SUCC_CODES"`
 
 	MongoURI    string `envconfig:"MONGODB_URI"`
 	DBName      string `envconfig:"MONGODB_DBNAME"`
 	MongoMICol  string `envconfig:"MONGODB_MICOL"`
+	MongoErrCol string `envconfig:"MONGODB_ERRCOL"`
 	MongoAgCol  string `envconfig:"MONGODB_AGCOL"`
 	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
 	MongoRevCol string `envconfig:"MONGODB_REVCOL"`
@@ -51,10 +53,6 @@ func main() {
 	if err := envconfig.Process("", &c); err != nil {
 		status.ExitFromError(status.NewError(4, fmt.Errorf("error loading config values from .env: %v", err.Error())))
 	}
-	client, err := newClient(c)
-	if err != nil {
-		status.ExitFromError(status.NewError(3, fmt.Errorf("newClient() error: %s", err)))
-	}
 	var pExec executor.PipelineExecution
 	erIN, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
@@ -63,7 +61,6 @@ func main() {
 	if err := prototext.Unmarshal(erIN, &pExec); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
-
 	agmi := storage.AgencyMonthlyInfo{
 		AgencyID: strings.ToLower(c.AID),
 		Month:    int(c.Month),
@@ -85,19 +82,26 @@ func main() {
 			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		}
 	}
-
+	miCol := c.MongoErrCol
+	if contains(c.SuccCodes, int(agmi.ProcInfo.Status)) {
+		miCol = c.MongoMICol
+	}
+	client, err := newClient(c, miCol)
+	if err != nil {
+		status.ExitFromError(status.NewError(3, fmt.Errorf("newClient() error: %s", err)))
+	}
 	if err = client.Store(agmi); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi: %v", err)))
 	}
 }
 
 // newClient Creates client to connect with DB and Cloud5
-func newClient(conf config) (*storage.Client, error) {
-	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, conf.MongoMICol, conf.MongoAgCol, conf.MongoPkgCol, conf.MongoRevCol)
+func newClient(conf config, miCol string) (*storage.Client, error) {
+	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, miCol, conf.MongoAgCol, conf.MongoPkgCol, conf.MongoRevCol)
 	if err != nil {
 		return nil, fmt.Errorf("error creating DB client: %q", err)
 	}
-	db.Collection(conf.MongoMICol)
+	db.Collection(miCol)
 	bc := storage.NewCloudClient(conf.SwiftUsername, conf.SwiftAPIKey, conf.SwiftAuthURL, conf.SwiftDomain, conf.SwiftContainer)
 	client, err := storage.NewClient(db, bc)
 	if err != nil {
@@ -116,4 +120,13 @@ func stepExec2ProcInfo(se *executor.StepExecution) *coleta.ProcInfo {
 		Status: se.StatusCode,
 		Env:    se.Env,
 	}
+}
+
+func contains(succCodes []int, s int) bool {
+	for _, c := range succCodes {
+		if s == c {
+			return true
+		}
+	}
+	return false
 }
