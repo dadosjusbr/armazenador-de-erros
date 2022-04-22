@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/executor"
@@ -13,6 +14,7 @@ import (
 	"github.com/dadosjusbr/storage"
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // O tipo decInt é necessário pois a biblioteca converte usando ParseInt passando
@@ -62,9 +64,10 @@ func main() {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
 	agmi := storage.AgencyMonthlyInfo{
-		AgencyID: strings.ToLower(c.AID),
-		Month:    int(c.Month),
-		Year:     int(c.Year),
+		AgencyID:          strings.ToLower(c.AID),
+		Month:             int(c.Month),
+		Year:              int(c.Year),
+		CrawlingTimestamp: timestamppb.Now(),
 	}
 	for _, r := range pExec.Results {
 		switch r.Status {
