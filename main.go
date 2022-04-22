@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/executor"
