@@ -11,6 +11,10 @@ import (
 	"github.com/dadosjusbr/executor"
 	"github.com/dadosjusbr/proto/coleta"
 	"github.com/dadosjusbr/storage"
+	"github.com/dadosjusbr/storage/models"
+	"github.com/dadosjusbr/storage/repositories/database/mongo"
+	"github.com/dadosjusbr/storage/repositories/database/postgres"
+	"github.com/dadosjusbr/storage/repositories/fileStorage"
 	"github.com/kelseyhightower/envconfig"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -41,6 +45,17 @@ type config struct {
 	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
 	MongoRevCol string `envconfig:"MONGODB_REVCOL"`
 
+	PostgresUser     string `envconfig:"POSTGRES_USER" required:"true"`
+	PostgresPassword string `envconfig:"POSTGRES_PASSWORD" required:"true"`
+	PostgresDBName   string `envconfig:"POSTGRES_DBNAME" required:"true"`
+	PostgresHost     string `envconfig:"POSTGRES_HOST" required:"true"`
+	PostgresPort     string `envconfig:"POSTGRES_PORT" required:"true"`
+
+	AWSRegion    string `envconfig:"AWS_REGION" required:"true"`
+	S3Bucket     string `envconfig:"S3_BUCKET" required:"true"`
+	AWSAccessKey string `envconfig:"AWS_ACCESS_KEY_ID" required:"true"`
+	AWSSecretKey string `envconfig:"AWS_SECRET_ACCESS_KEY" required:"true"`
+
 	// Swift Conf
 	SwiftUsername  string `envconfig:"SWIFT_USERNAME"`
 	SwiftAPIKey    string `envconfig:"SWIFT_APIKEY"`
@@ -62,7 +77,7 @@ func main() {
 	if err := prototext.Unmarshal(erIN, &pExec); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
-	agmi := storage.AgencyMonthlyInfo{
+	agmi := models.AgencyMonthlyInfo{
 		AgencyID:          strings.ToLower(c.AID),
 		Month:             int(c.Month),
 		Year:              int(c.Year),
@@ -88,28 +103,45 @@ func main() {
 	if contains(c.SuccCodes, int(agmi.ProcInfo.Status)) {
 		miCol = c.MongoMICol
 	}
-	client, err := newClient(c, miCol)
+	// Criando o client do MongoDB
+	mongoDb, err := mongo.NewMongoDB(c.MongoURI, c.DBName, c.MongoMICol, c.MongoAgCol, c.MongoPkgCol, c.MongoRevCol)
 	if err != nil {
-		status.ExitFromError(status.NewError(3, fmt.Errorf("newClient() error: %s", err)))
+		status.ExitFromError(status.NewError(4, fmt.Errorf("error creating MongoDB client: %v", err.Error())))
 	}
-	if err = client.Store(agmi); err != nil {
-		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi: %v", err)))
-	}
-}
+	mongoDb.Collection(miCol)
 
-// newClient Creates client to connect with DB and Cloud5
-func newClient(conf config, miCol string) (*storage.Client, error) {
-	db, err := storage.NewDBClient(conf.MongoURI, conf.DBName, miCol, conf.MongoAgCol, conf.MongoPkgCol, conf.MongoRevCol)
+	// Criando o client do Postgres
+	postgresDB, err := postgres.NewPostgresDB(c.PostgresUser, c.PostgresPassword, c.PostgresDBName, c.PostgresHost, c.PostgresPort)
 	if err != nil {
-		return nil, fmt.Errorf("error creating DB client: %q", err)
+		status.ExitFromError(status.NewError(4, fmt.Errorf("error creating PostgresDB client: %v", err.Error())))
 	}
-	db.Collection(miCol)
-	bc := storage.NewCloudClient(conf.SwiftUsername, conf.SwiftAPIKey, conf.SwiftAuthURL, conf.SwiftDomain, conf.SwiftContainer)
-	client, err := storage.NewClient(db, bc)
+
+	// Criando o client do S3
+	s3Client, err := fileStorage.NewS3Client(c.AWSRegion, c.S3Bucket)
 	if err != nil {
-		return nil, fmt.Errorf("error creating storage.client: %q", err)
+		status.ExitFromError(status.NewError(4, fmt.Errorf("error creating S3 client: %v", err.Error())))
 	}
-	return client, nil
+
+	// Criando client do storage a partir do banco postgres e do client do s3
+	pgS3Client, err := storage.NewClient(postgresDB, s3Client)
+	if err != nil {
+		status.ExitFromError(status.NewError(3, fmt.Errorf("error setting up postgres storage client: %s", err)))
+	}
+	defer pgS3Client.Db.Disconnect()
+
+	// Criando o client do storage a partir do banco mongodb e do client do s3
+	mgoS3Client, err := storage.NewClient(mongoDb, s3Client)
+	if err != nil {
+		status.ExitFromError(status.NewError(3, fmt.Errorf("error setting up mongo storage client: %s", err)))
+	}
+	defer mgoS3Client.Db.Disconnect()
+
+	if err = mgoS3Client.Store(agmi); err != nil {
+		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in mongo: %v", err)))
+	}
+	if err = pgS3Client.Store(agmi); err != nil {
+		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in postgres: %v", err)))
+	}
 }
 
 func stepExec2ProcInfo(se *executor.StepExecution) *coleta.ProcInfo {
