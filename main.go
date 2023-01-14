@@ -6,13 +6,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/executor"
 	"github.com/dadosjusbr/proto/coleta"
 	"github.com/dadosjusbr/storage"
 	"github.com/dadosjusbr/storage/models"
-	"github.com/dadosjusbr/storage/repositories/database/mongo"
 	"github.com/dadosjusbr/storage/repositories/database/postgres"
 	"github.com/dadosjusbr/storage/repositories/fileStorage"
 	"github.com/kelseyhightower/envconfig"
@@ -62,6 +62,9 @@ type config struct {
 	SwiftAuthURL   string `envconfig:"SWIFT_AUTHURL"`
 	SwiftDomain    string `envconfig:"SWIFT_DOMAIN"`
 	SwiftContainer string `envconfig:"SWIFT_CONTAINER"`
+
+	// Tempo inicial da coleta
+	StartTime string `envconfig:"START_TIME" required:"false"`
 }
 
 func main() {
@@ -83,32 +86,39 @@ func main() {
 		Year:              int(c.Year),
 		CrawlingTimestamp: timestamppb.Now(),
 	}
+
+	// Calculando o tempo de execução da coleta
+	if c.StartTime != "" {
+		layout := "2006-01-02 15:04:05.000000"    // formato data-hora
+		t, err := time.Parse(layout, c.StartTime) // transformando a hora (string) para o tipo time.Time
+		if err == nil {
+			Duration := time.Since(t) // Calcula a diferença da hora dada com a hora atual (UTC+0)
+			agmi.Duration = time.Duration(Duration.Seconds())
+		}
+	}
+
 	for _, r := range pExec.Results {
 		switch r.Status {
 		case executor.StageExecution_SETUP_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Setup)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_BUILD_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Build)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_RUN_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Run)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_TEARDOWN_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		}
 	}
-	miCol := c.MongoErrCol
-	if contains(c.SuccCodes, int(agmi.ProcInfo.Status)) {
-		miCol = c.MongoMICol
-	}
+	// miCol := c.MongoErrCol
+	// if contains(c.SuccCodes, int(agmi.ProcInfo.Status)) {
+	// 	miCol = c.MongoMICol
+	// }
 	// Criando o client do MongoDB
-	mongoDb, err := mongo.NewMongoDB(c.MongoURI, c.DBName, c.MongoMICol, c.MongoAgCol, c.MongoPkgCol, c.MongoRevCol)
-	if err != nil {
-		status.ExitFromError(status.NewError(4, fmt.Errorf("error creating MongoDB client: %v", err.Error())))
-	}
-	mongoDb.Collection(miCol)
+	// mongoDb, err := mongo.NewMongoDB(c.MongoURI, c.DBName, c.MongoMICol, c.MongoAgCol, c.MongoPkgCol, c.MongoRevCol)
+	// if err != nil {
+	// 	status.ExitFromError(status.NewError(4, fmt.Errorf("error creating MongoDB client: %v", err.Error())))
+	// }
+	// mongoDb.Collection(miCol)
 
 	// Criando o client do Postgres
 	postgresDB, err := postgres.NewPostgresDB(c.PostgresUser, c.PostgresPassword, c.PostgresDBName, c.PostgresHost, c.PostgresPort)
@@ -130,15 +140,15 @@ func main() {
 	defer pgS3Client.Db.Disconnect()
 
 	// Criando o client do storage a partir do banco mongodb e do client do s3
-	mgoS3Client, err := storage.NewClient(mongoDb, s3Client)
-	if err != nil {
-		status.ExitFromError(status.NewError(3, fmt.Errorf("error setting up mongo storage client: %s", err)))
-	}
-	defer mgoS3Client.Db.Disconnect()
+	// mgoS3Client, err := storage.NewClient(mongoDb, s3Client)
+	// if err != nil {
+	// 	status.ExitFromError(status.NewError(3, fmt.Errorf("error setting up mongo storage client: %s", err)))
+	// }
+	// defer mgoS3Client.Db.Disconnect()
 
-	if err = mgoS3Client.Store(agmi); err != nil {
-		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in mongo: %v", err)))
-	}
+	// if err = mgoS3Client.Store(agmi); err != nil {
+	// 	status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in mongo: %v", err)))
+	// }
 	if err = pgS3Client.Store(agmi); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in postgres: %v", err)))
 	}
