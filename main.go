@@ -37,14 +37,6 @@ type config struct {
 	AID       string `envconfig:"AID"`
 	SuccCodes []int  `envconfig:"SUCC_CODES"`
 
-	MongoURI    string `envconfig:"MONGODB_URI"`
-	DBName      string `envconfig:"MONGODB_DBNAME"`
-	MongoMICol  string `envconfig:"MONGODB_MICOL"`
-	MongoErrCol string `envconfig:"MONGODB_ERRCOL"`
-	MongoAgCol  string `envconfig:"MONGODB_AGCOL"`
-	MongoPkgCol string `envconfig:"MONGODB_PKGCOL"`
-	MongoRevCol string `envconfig:"MONGODB_REVCOL"`
-
 	PostgresUser     string `envconfig:"POSTGRES_USER" required:"true"`
 	PostgresPassword string `envconfig:"POSTGRES_PASSWORD" required:"true"`
 	PostgresDBName   string `envconfig:"POSTGRES_DBNAME" required:"true"`
@@ -55,13 +47,6 @@ type config struct {
 	S3Bucket     string `envconfig:"S3_BUCKET" required:"true"`
 	AWSAccessKey string `envconfig:"AWS_ACCESS_KEY_ID" required:"true"`
 	AWSSecretKey string `envconfig:"AWS_SECRET_ACCESS_KEY" required:"true"`
-
-	// Swift Conf
-	SwiftUsername  string `envconfig:"SWIFT_USERNAME"`
-	SwiftAPIKey    string `envconfig:"SWIFT_APIKEY"`
-	SwiftAuthURL   string `envconfig:"SWIFT_AUTHURL"`
-	SwiftDomain    string `envconfig:"SWIFT_DOMAIN"`
-	SwiftContainer string `envconfig:"SWIFT_CONTAINER"`
 
 	// Tempo inicial da coleta
 	StartTime string `envconfig:"START_TIME" required:"false"`
@@ -109,16 +94,6 @@ func main() {
 			agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
 		}
 	}
-	// miCol := c.MongoErrCol
-	// if contains(c.SuccCodes, int(agmi.ProcInfo.Status)) {
-	// 	miCol = c.MongoMICol
-	// }
-	// Criando o client do MongoDB
-	// mongoDb, err := mongo.NewMongoDB(c.MongoURI, c.DBName, c.MongoMICol, c.MongoAgCol, c.MongoPkgCol, c.MongoRevCol)
-	// if err != nil {
-	// 	status.ExitFromError(status.NewError(4, fmt.Errorf("error creating MongoDB client: %v", err.Error())))
-	// }
-	// mongoDb.Collection(miCol)
 
 	// Criando o client do Postgres
 	postgresDB, err := postgres.NewPostgresDB(c.PostgresUser, c.PostgresPassword, c.PostgresDBName, c.PostgresHost, c.PostgresPort)
@@ -139,16 +114,6 @@ func main() {
 	}
 	defer pgS3Client.Db.Disconnect()
 
-	// Criando o client do storage a partir do banco mongodb e do client do s3
-	// mgoS3Client, err := storage.NewClient(mongoDb, s3Client)
-	// if err != nil {
-	// 	status.ExitFromError(status.NewError(3, fmt.Errorf("error setting up mongo storage client: %s", err)))
-	// }
-	// defer mgoS3Client.Db.Disconnect()
-
-	// if err = mgoS3Client.Store(agmi); err != nil {
-	// 	status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in mongo: %v", err)))
-	// }
 	if err = pgS3Client.Store(agmi); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error trying to store agmi in postgres: %v", err)))
 	}
