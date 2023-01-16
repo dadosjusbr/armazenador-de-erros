@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dadosjusbr/coletores/status"
 	"github.com/dadosjusbr/executor"
@@ -46,6 +47,9 @@ type config struct {
 	S3Bucket     string `envconfig:"S3_BUCKET" required:"true"`
 	AWSAccessKey string `envconfig:"AWS_ACCESS_KEY_ID" required:"true"`
 	AWSSecretKey string `envconfig:"AWS_SECRET_ACCESS_KEY" required:"true"`
+
+	// Tempo inicial da coleta
+	StartTime string `envconfig:"START_TIME" required:"false"`
 }
 
 func main() {
@@ -67,20 +71,28 @@ func main() {
 		Year:              int(c.Year),
 		CrawlingTimestamp: timestamppb.Now(),
 	}
+
+	// Calculando o tempo de execução da coleta
+	if c.StartTime != "" {
+		layout := "2006-01-02 15:04:05.000000"    // formato data-hora
+		t, err := time.Parse(layout, c.StartTime) // transformando a hora (string) para o tipo time.Time
+		if err != nil {
+			status.ExitFromError(status.NewError(2, fmt.Errorf("error calculating collection time: %v", err)))
+		}
+		Duration := time.Since(t) // Calcula a diferença da hora dada com a hora atual (UTC+0)
+		agmi.Duration = time.Duration(Duration.Seconds())
+	}
+
 	for _, r := range pExec.Results {
 		switch r.Status {
 		case executor.StageExecution_SETUP_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Setup)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_BUILD_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Build)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_RUN_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Run)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		case executor.StageExecution_TEARDOWN_ERROR:
 			agmi.ProcInfo = stepExec2ProcInfo(r.Teardown)
-			agmi.ExectionTime = float64(r.Setup.FinishTime.AsTime().Sub(r.Setup.StartTime.AsTime()).Milliseconds())
 		}
 	}
 
@@ -118,13 +130,4 @@ func stepExec2ProcInfo(se *executor.StepExecution) *coleta.ProcInfo {
 		Status: se.StatusCode,
 		Env:    se.Env,
 	}
-}
-
-func contains(succCodes []int, s int) bool {
-	for _, c := range succCodes {
-		if s == c {
-			return true
-		}
-	}
-	return false
 }
