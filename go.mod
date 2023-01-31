@@ -6,8 +6,8 @@ require (
 	github.com/dadosjusbr/coletores v0.0.0-20220521130533-3ea228db357b
 	github.com/dadosjusbr/executor v0.0.0-20211027234931-d5885d64d0a1
 	github.com/dadosjusbr/proto v0.0.0-20221212025627-91c60aa3cd12
-	github.com/dadosjusbr/storage v0.0.0-20230114143747-3224898240b5
-	github.com/joho/godotenv v1.3.0
+	github.com/dadosjusbr/storage v0.0.0-20230131000353-c4889a1c7061
+	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	google.golang.org/protobuf v1.28.1
 )
@@ -23,6 +23,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.3.1 // indirect
 	github.com/go-git/go-git/v5 v5.5.1 // indirect
 	github.com/go-sql-driver/mysql v1.7.0 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
