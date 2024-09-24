@@ -65,11 +65,16 @@ func main() {
 	if err := prototext.Unmarshal(erIN, &pExec); err != nil {
 		status.ExitFromError(status.NewError(2, fmt.Errorf("error reading execution result: %v", err)))
 	}
+
+	// A variável de ambiente só será passada quando a coleta for manual
+	_, manualCollection := os.LookupEnv("MANUAL_COLLECTION")
+
 	agmi := models.AgencyMonthlyInfo{
 		AgencyID:          strings.ToLower(c.AID),
 		Month:             int(c.Month),
 		Year:              int(c.Year),
 		CrawlingTimestamp: timestamppb.Now(),
+		ManualCollection:  manualCollection,
 	}
 
 	// Calculando o tempo de execução da coleta
