@@ -6,7 +6,7 @@ require (
 	github.com/dadosjusbr/coletores v0.0.0-20220521130533-3ea228db357b
 	github.com/dadosjusbr/executor v0.0.0-20211027234931-d5885d64d0a1
 	github.com/dadosjusbr/proto v0.0.0-20221212025627-91c60aa3cd12
-	github.com/dadosjusbr/storage v0.0.0-20230131000353-c4889a1c7061
+	github.com/dadosjusbr/storage v0.0.0-20240923172949-d3b675a3e292
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	google.golang.org/protobuf v1.28.1
